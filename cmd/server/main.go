@@ -7,6 +7,9 @@ import (
 	"google.golang.org/grpc"
 	"log"
 	"net"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 type server struct {
@@ -26,10 +29,21 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	grpcServer := grpc.NewServer()
-	notification.RegisterNotificationServiceServer(grpcServer, &server{})
+	s := grpc.NewServer()
+	notification.RegisterNotificationServiceServer(s, &server{})
 
-	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
-	}
+	go func() {
+		log.Println("Starting gRPC Server on :9000")
+		if err := s.Serve(lis); err != nil {
+			log.Fatalf("failed to serve: %v", err)
+		}
+	}()
+
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	<-ch
+	log.Println("Shutting down gRPC Server")
+	s.GracefulStop()
+	log.Println("Server gracefully stopped")
+
 }
